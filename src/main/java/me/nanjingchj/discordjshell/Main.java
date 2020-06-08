@@ -100,13 +100,18 @@ public class Main extends ListenerAdapter {
                 }
                 if (audio == null || playing) {
                     try {
-                        Thread.sleep(1000);
+                        Thread.onSpinWait();
+                        Thread.sleep(1200);
                     } catch (InterruptedException e) {
                         e.printStackTrace();
                     }
                     continue;
                 }
-                playAudio(audio.getFirst(), new String[]{"", audio.getSecond()});
+                try {
+                    playAudio(audio.getFirst(), new String[]{"", audio.getSecond()});
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
                 synchronized (audios) {
                     audios.poll();
                 }
@@ -130,7 +135,7 @@ public class Main extends ListenerAdapter {
         }
     }
 
-    private void playAudio(MessageReceivedEvent event, String[] args) {
+    private void playAudio(@NotNull MessageReceivedEvent event, String[] args) {
         var guild = event.getGuild();
         var musicChannels = guild.getVoiceChannelsByName("Music", true);
 
@@ -141,27 +146,34 @@ public class Main extends ListenerAdapter {
         var musicChannel = musicChannels.get(0);
         var audioManager = guild.getAudioManager();
         final AudioTrack[] audioTrackToPlay = new AudioTrack[1];
+        final boolean[] loadingError = {false};
         playerManager.loadItem(args[1], new AudioLoadResultHandler() {
             @Override
             public void trackLoaded(AudioTrack audioTrack) {
                 System.out.println(audioTrack.getInfo().uri);
                 audioTrackToPlay[0] = audioTrack;
+                //event.getChannel().sendMessage("Playing " + audioTrackToPlay[0].getIdentifier()).queue();
             }
 
             @Override
             public void playlistLoaded(AudioPlaylist audioPlaylist) {
                 audioTrackToPlay[0] = audioPlaylist.getTracks().get(0);
                 System.out.println(audioTrackToPlay[0].getInfo().uri);
+                //event.getChannel().sendMessage("Playing " + audioTrackToPlay[0].getIdentifier()).queue();
             }
 
             @Override
             public void noMatches() {
-                System.err.println("No Matches");
+                System.err.println("No matches");
+                event.getChannel().sendMessage("No matches").queue();
+                playing = false;
+                loadingError[0] = true;
             }
 
             @Override
             public void loadFailed(FriendlyException e) {
                 e.printStackTrace();
+                loadingError[0] = true;
             }
         });
         audioManager.setSendingHandler(new AudioSendHandler() {
@@ -172,6 +184,9 @@ public class Main extends ListenerAdapter {
                 audioPlayer = playerManager.createPlayer();
                 while (audioTrackToPlay[0] == null) {
                     Thread.onSpinWait();
+                    if (loadingError[0]) {
+                        throw new RuntimeException();
+                    }
                 }
                 audioPlayer.playTrack(audioTrackToPlay[0]);
                 playing = true;
