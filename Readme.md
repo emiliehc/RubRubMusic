@@ -1,8 +1,9 @@
 # RubRubMusic
 RubRubMusic is a multi-purpose bot for Discord.
 
-## Invitation to the server
+## Inviting the bot to your server
 If you want to invite the bot to your server, you can use this link: https://discord.com/api/oauth2/authorize?client_id=698581641190178876&permissions=8&scope=bot
+Please contact the developer if you believe that the link is no longer valid.
 
 ## List of functions
 1. JShell
