@@ -9,6 +9,7 @@ import com.sedmelluq.discord.lavaplayer.tools.FriendlyException;
 import com.sedmelluq.discord.lavaplayer.track.AudioPlaylist;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
 import com.sedmelluq.discord.lavaplayer.track.playback.AudioFrame;
+import kotlin.Pair;
 import net.dv8tion.jda.api.AccountType;
 import net.dv8tion.jda.api.JDABuilder;
 import net.dv8tion.jda.api.audio.AudioSendHandler;
@@ -19,10 +20,7 @@ import org.jetbrains.annotations.NotNull;
 
 import java.io.*;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Random;
-import java.util.Scanner;
+import java.util.*;
 
 enum SoundEffectPlayingConfiguration {
     Last, First, Random
@@ -30,15 +28,18 @@ enum SoundEffectPlayingConfiguration {
 
 public class Main extends ListenerAdapter {
     public volatile MessageChannel channel = null;
-    public Process jShell;
-    public Scanner jShellInput;
-    public Scanner jShellError;
+    public volatile Process jShell;
+    public volatile Scanner jShellInput;
+    public volatile Scanner jShellError;
     private final AudioPlayerManager playerManager = new DefaultAudioPlayerManager();
 
     private final List<@NotNull String> startupSounds = new ArrayList<>();
     private SoundEffectPlayingConfiguration startupSoundConfig = SoundEffectPlayingConfiguration.Last;
     private final List<@NotNull String> shutdownSounds = new ArrayList<>();
     private SoundEffectPlayingConfiguration shutdownSoundConfig = SoundEffectPlayingConfiguration.Last;
+
+    private final Queue<Pair<MessageReceivedEvent, String>> audios = new ArrayDeque<>(100);
+    private volatile boolean playing = false;
 
     public Main() throws IOException {
         startupSounds.add("https://www.youtube.com/watch?v=7nQ2oiVqKHw");
@@ -62,7 +63,6 @@ public class Main extends ListenerAdapter {
                 }
             }
         }).start();
-
 
         new Thread(() -> {
             Scanner sc = new Scanner(System.in);
@@ -89,6 +89,28 @@ public class Main extends ListenerAdapter {
                 }
             }
 
+        }).start();
+
+        // music playing thread
+        new Thread(() -> {
+            for (; ; ) {
+                Pair<MessageReceivedEvent, String> audio = null;
+                synchronized (audios) {
+                    audio = audios.peek();
+                }
+                if (audio == null || playing) {
+                    try {
+                        Thread.sleep(1000);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                    continue;
+                }
+                playAudio(audio.getFirst(), new String[]{"", audio.getSecond()});
+                synchronized (audios) {
+                    audios.poll();
+                }
+            }
         }).start();
     }
 
@@ -152,12 +174,15 @@ public class Main extends ListenerAdapter {
                     Thread.onSpinWait();
                 }
                 audioPlayer.playTrack(audioTrackToPlay[0]);
+                playing = true;
             }
 
             @Override
             public boolean canProvide() {
                 lastFrame = audioPlayer.provide();
-                return lastFrame != null;
+                boolean result = lastFrame != null;
+                playing = result;
+                return result;
             }
 
             @Override
@@ -199,7 +224,14 @@ public class Main extends ListenerAdapter {
                             e.printStackTrace();
                         }
                     }
-                    case "play" -> playAudio(event, args);
+                    case "play" -> {
+                        synchronized (audios) {
+                            audios.add(new Pair<>(event, args[1]));
+                        }
+                    }
+                    case "skip" -> {
+                        playAudio(event, new String[]{"", "https://www.youtube.com/watch?v=Wch3gJG2GJ4"});
+                    }
                     case "set" -> {
                         switch (args[1]) {
                             case "startup" -> {
