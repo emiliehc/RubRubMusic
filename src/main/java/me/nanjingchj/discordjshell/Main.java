@@ -13,6 +13,7 @@ import kotlin.Pair;
 import net.dv8tion.jda.api.AccountType;
 import net.dv8tion.jda.api.JDABuilder;
 import net.dv8tion.jda.api.audio.AudioSendHandler;
+import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.MessageChannel;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
@@ -27,10 +28,10 @@ enum SoundEffectPlayingConfiguration {
 }
 
 public class Main extends ListenerAdapter {
-    public volatile MessageChannel channel = null;
-    public volatile Process jShell;
-    public volatile Scanner jShellInput;
-    public volatile Scanner jShellError;
+    private volatile MessageChannel channel = null;
+    private volatile Process jShell;
+    private volatile Scanner jShellInput;
+    private volatile Scanner jShellError;
     private final AudioPlayerManager playerManager = new DefaultAudioPlayerManager();
 
     private final List<@NotNull String> startupSounds = new ArrayList<>();
@@ -38,9 +39,11 @@ public class Main extends ListenerAdapter {
     private final List<@NotNull String> shutdownSounds = new ArrayList<>();
     private SoundEffectPlayingConfiguration shutdownSoundConfig = SoundEffectPlayingConfiguration.Last;
 
-    private final Queue<Pair<MessageReceivedEvent, String>> audios = new ArrayDeque<>(100);
-    private volatile boolean playing = false;
+    //private final Queue<Pair<MessageReceivedEvent, String>> audios = new ArrayDeque<>(100);
+    private final Map<Guild, Queue<Pair<MessageReceivedEvent, String>>> audioQueues = new HashMap<>();
+    private final Map<Guild, Boolean> playing = new HashMap<>();
 
+    @SuppressWarnings({"SynchronizationOnLocalVariableOrMethodParameter", "BusyWait"})
     public Main() throws IOException {
         startupSounds.add("https://www.youtube.com/watch?v=7nQ2oiVqKHw");
         shutdownSounds.add("https://www.youtube.com/watch?v=Gb2jGy76v0Y");
@@ -94,26 +97,32 @@ public class Main extends ListenerAdapter {
         // music playing thread
         new Thread(() -> {
             for (; ; ) {
-                Pair<MessageReceivedEvent, String> audio = null;
-                synchronized (audios) {
-                    audio = audios.peek();
-                }
-                if (audio == null || playing) {
-                    try {
-                        Thread.onSpinWait();
-                        Thread.sleep(1200);
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
-                    continue;
+                synchronized (audioQueues) {
+                    audioQueues.forEach((guild, queue) -> {
+                        Pair<MessageReceivedEvent, String> audio;
+                        synchronized (queue) {
+                            audio = queue.peek();
+                        }
+                        boolean isPlaying;
+                        synchronized (playing) {
+                            isPlaying = playing.get(guild);
+                        }
+                        if (audio != null && !isPlaying) {
+                            try {
+                                playAudio(audio.getFirst(), new String[]{"", audio.getSecond()});
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                            }
+                            synchronized (queue) {
+                                queue.poll();
+                            }
+                        }
+                    });
                 }
                 try {
-                    playAudio(audio.getFirst(), new String[]{"", audio.getSecond()});
-                } catch (Exception e) {
+                    Thread.sleep(100);
+                } catch (InterruptedException e) {
                     e.printStackTrace();
-                }
-                synchronized (audios) {
-                    audios.poll();
                 }
             }
         }).start();
@@ -166,7 +175,7 @@ public class Main extends ListenerAdapter {
             public void noMatches() {
                 System.err.println("No matches");
                 event.getChannel().sendMessage("No matches").queue();
-                playing = false;
+                playing.put(guild, false);
                 loadingError[0] = true;
             }
 
@@ -189,14 +198,14 @@ public class Main extends ListenerAdapter {
                     }
                 }
                 audioPlayer.playTrack(audioTrackToPlay[0]);
-                playing = true;
+                playing.put(guild, true);
             }
 
             @Override
             public boolean canProvide() {
                 lastFrame = audioPlayer.provide();
                 boolean result = lastFrame != null;
-                playing = result;
+                playing.put(guild, result);
                 return result;
             }
 
@@ -213,6 +222,7 @@ public class Main extends ListenerAdapter {
         audioManager.openAudioConnection(musicChannel);
     }
 
+    @SuppressWarnings("SynchronizationOnLocalVariableOrMethodParameter")
     @Override
     public void onMessageReceived(@NotNull MessageReceivedEvent event) {
         try {
@@ -240,12 +250,26 @@ public class Main extends ListenerAdapter {
                         }
                     }
                     case "play" -> {
-                        synchronized (audios) {
-                            audios.add(new Pair<>(event, args[1]));
+                        Guild guild = event.getGuild();
+                        Queue<Pair<MessageReceivedEvent, String>> queue = audioQueues.get(guild);
+                        if (queue == null) {
+                            queue = new ArrayDeque<>();
+                            synchronized (audioQueues) {
+                                audioQueues.put(guild, queue);
+                            }
+                        }
+                        if (playing.get(guild) == null) {
+                            synchronized (playing) {
+                                playing.put(guild, false);
+                            }
+                        }
+                        synchronized (queue) {
+                            queue.add(new Pair<>(event, args[1]));
                         }
                     }
                     case "skip" -> {
                         playAudio(event, new String[]{"", "https://www.youtube.com/watch?v=Wch3gJG2GJ4"});
+
                     }
                     case "set" -> {
                         switch (args[1]) {
