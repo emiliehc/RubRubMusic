@@ -23,10 +23,6 @@ import java.io.*;
 import java.nio.ByteBuffer;
 import java.util.*;
 
-enum SoundEffectPlayingConfiguration {
-    Last, First, Random
-}
-
 public class Main extends ListenerAdapter {
     private volatile MessageChannel channel = null;
     private volatile Process jShell;
@@ -34,21 +30,48 @@ public class Main extends ListenerAdapter {
     private volatile Scanner jShellError;
     private final AudioPlayerManager playerManager = new DefaultAudioPlayerManager();
 
-    private final List<@NotNull String> startupSounds = new ArrayList<>();
-    private SoundEffectPlayingConfiguration startupSoundConfig = SoundEffectPlayingConfiguration.Last;
-    private final List<@NotNull String> shutdownSounds = new ArrayList<>();
-    private SoundEffectPlayingConfiguration shutdownSoundConfig = SoundEffectPlayingConfiguration.Last;
+    private final Runnable backupCallback = () -> {
+        // backup
+        try {
+            File f = new File("config");
+            if (!f.exists()) {
+                if (!f.createNewFile()) {
+                    throw new Error("This should never be thrown");
+                }
+            }
+            try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(f))) {
+                oos.writeObject(getConfigurations());
+                oos.flush();
+            }
+        } catch (IOException ex) {
+            ex.printStackTrace();
+        }
+    };
 
-    //private final Queue<Pair<MessageReceivedEvent, String>> audios = new ArrayDeque<>(100);
     private final Map<Guild, Queue<Pair<MessageReceivedEvent, String>>> audioQueues = new HashMap<>();
     private final Map<Guild, Boolean> playing = new HashMap<>();
+    private final Map<String, ConfigurationManager> configurations;
 
-    @SuppressWarnings({"SynchronizationOnLocalVariableOrMethodParameter", "BusyWait"})
-    public Main() throws IOException {
-        startupSounds.add("https://www.youtube.com/watch?v=7nQ2oiVqKHw");
-        shutdownSounds.add("https://www.youtube.com/watch?v=Gb2jGy76v0Y");
+    private Map<String, ConfigurationManager> getConfigurations() {
+        return configurations;
+    }
 
+    @SuppressWarnings({"SynchronizationOnLocalVariableOrMethodParameter", "BusyWait", "unchecked"})
+    public Main() throws IOException, ClassNotFoundException {
         AudioSourceManagers.registerRemoteSources(playerManager);
+
+        File f = new File("config");
+        if (!f.exists()) {
+            if (!f.createNewFile()) {
+                throw new Error("This should never be thrown");
+            }
+            configurations = new CallbackHashMap<>(backupCallback);
+        } else {
+            try (ObjectInputStream oos = new ObjectInputStream(new FileInputStream(f))) {
+                configurations = (Map<String, ConfigurationManager>) oos.readObject();
+                ((CallbackHashMap<?, ?>) configurations).setCallback(backupCallback);
+            }
+        }
 
         var processBuilder = new ProcessBuilder("jshell");
         jShell = processBuilder.start();
@@ -79,6 +102,7 @@ public class Main extends ListenerAdapter {
                 }
             }
         }).start();
+
 
         new Thread(() -> {
             for (; ; ) {
@@ -126,6 +150,28 @@ public class Main extends ListenerAdapter {
                 }
             }
         }).start();
+    }
+
+    private static void initConfigurations(ConfigurationManager configurationManager) {
+        List<@NotNull String> startupSounds = new ArrayList<>(), shutdownSounds = new ArrayList<>();
+        startupSounds.add("https://www.youtube.com/watch?v=7nQ2oiVqKHw");
+        shutdownSounds.add("https://www.youtube.com/watch?v=Gb2jGy76v0Y");
+        configurationManager.setConfiguration("startupSounds", startupSounds);
+        configurationManager.setConfiguration("shutdownSounds", shutdownSounds);
+        SelectionFromListConfig startupSoundConfig = SelectionFromListConfig.Last;
+        SelectionFromListConfig shutdownSoundConfig = SelectionFromListConfig.Last;
+        configurationManager.setConfiguration("startupSoundConfig", startupSoundConfig);
+        configurationManager.setConfiguration("shutdownSoundConfig", shutdownSoundConfig);
+    }
+
+    private synchronized ConfigurationManager getConfigurationManager(@NotNull Guild guild) {
+        ConfigurationManager manager = configurations.get(guild.getId());
+        if (manager == null) {
+            manager = new ConfigurationManager();
+            initConfigurations(manager);
+            configurations.put(guild.getId(), manager);
+        }
+        return manager;
     }
 
     @SuppressWarnings("deprecation")
@@ -222,7 +268,7 @@ public class Main extends ListenerAdapter {
         audioManager.openAudioConnection(musicChannel);
     }
 
-    @SuppressWarnings("SynchronizationOnLocalVariableOrMethodParameter")
+    @SuppressWarnings({"SynchronizationOnLocalVariableOrMethodParameter", "unchecked"})
     @Override
     public void onMessageReceived(@NotNull MessageReceivedEvent event) {
         try {
@@ -263,21 +309,28 @@ public class Main extends ListenerAdapter {
                                 playing.put(guild, false);
                             }
                         }
+                        String url;
+                        if (args[1].equals("ext")) {
+                            url = getConfigurationManager(guild).getExtConfiguration(args[2]);
+                        } else {
+                            url = args[1];
+                        }
                         synchronized (queue) {
-                            queue.add(new Pair<>(event, args[1]));
+                            queue.add(new Pair<>(event, url));
                         }
                     }
-                    case "skip" -> {
-                        playAudio(event, new String[]{"", "https://www.youtube.com/watch?v=Wch3gJG2GJ4"});
-
-                    }
+                    case "skip" -> playAudio(event, new String[]{"", "https://www.youtube.com/watch?v=Wch3gJG2GJ4"});
                     case "set" -> {
                         switch (args[1]) {
                             case "startup" -> {
+                                final List<@NotNull String> startupSounds = (List<String>) getConfigurationManager(event.getGuild()).getConfiguration("startupSounds");
+                                assert startupSounds != null;
                                 startupSounds.clear();
                                 startupSounds.add(args[2].replaceAll("\"", ""));
                             }
                             case "shutdown" -> {
+                                final List<@NotNull String> shutdownSounds = (List<String>) getConfigurationManager(event.getGuild()).getConfiguration("shutdownSounds");
+                                assert shutdownSounds != null;
                                 shutdownSounds.clear();
                                 shutdownSounds.add(args[2].replaceAll("\"", ""));
                             }
@@ -286,16 +339,33 @@ public class Main extends ListenerAdapter {
                     }
                     case "configure" -> {
                         switch (args[1]) {
-                            case "startup" -> startupSoundConfig = SoundEffectPlayingConfiguration.valueOf(args[2]);
-                            case "shutdown" -> shutdownSoundConfig = SoundEffectPlayingConfiguration.valueOf(args[2]);
+                            case "startup" -> getConfigurationManager(event.getGuild()).setConfiguration("startupSoundConfig", SelectionFromListConfig.valueOf(args[2]));
+                            case "shutdown" -> getConfigurationManager(event.getGuild()).setConfiguration("shutdownSoundConfig", SelectionFromListConfig.valueOf(args[2]));
+                            case "ext" -> getConfigurationManager(event.getGuild()).setExtConfiguration(args[2], args[3].equals("null") ? null : args[3]);
                             default -> throw new UnsupportedOperationException();
                         }
                     }
                     case "add" -> {
                         switch (args[1]) {
-                            case "startup" -> startupSounds.add(args[2].replaceAll("\"", ""));
-                            case "shutdown" -> shutdownSounds.add(args[2].replaceAll("\"", ""));
+                            case "startup" -> {
+                                final List<@NotNull String> startupSounds = (List<String>) getConfigurationManager(event.getGuild()).getConfiguration("startupSounds");
+                                assert startupSounds != null;
+                                startupSounds.add(args[2].replaceAll("\"", ""));
+                            }
+                            case "shutdown" -> {
+                                final List<@NotNull String> shutdownSounds = (List<String>) getConfigurationManager(event.getGuild()).getConfiguration("shutdownSounds");
+                                assert shutdownSounds != null;
+                                shutdownSounds.add(args[2].replaceAll("\"", ""));
+                            }
                             default -> throw new UnsupportedOperationException();
+                        }
+                    }
+                    case "readConfig" -> {
+                        if ("ext".equals(args[1])) {
+                            String value = getConfigurationManager(event.getGuild()).getExtConfiguration(args[2]);
+                            event.getChannel().sendMessage(value == null ? "null" : value).queue();
+                        } else {
+                            throw new UnsupportedOperationException();
                         }
                     }
                     default -> throw new UnsupportedOperationException("Unknown command");
@@ -319,20 +389,26 @@ public class Main extends ListenerAdapter {
             t.printStackTrace(pw);
             t.printStackTrace();
             for (String line : t.toString().split("\n")) {
-                printActiveChannel(line);
+                event.getChannel().sendMessage(line).queue();
             }
         }
     }
 
+    @SuppressWarnings("unchecked")
     private void sendEnterChannelMessage(MessageReceivedEvent event, MessageChannel channel) {
-        String sound = getSoundStringFromListAndConfig(startupSoundConfig, startupSounds);
+        final List<@NotNull String> startupSounds = (List<String>) getConfigurationManager(event.getGuild()).getConfiguration("startupSounds");
+        assert startupSounds != null;
+        String sound = getFromListWithConfig(getConfigurationManager(event.getGuild()).getConfiguration("startupSoundConfig", SelectionFromListConfig.class), startupSounds);
         playAudio(event, new String[]{"", sound});
         channel.sendMessage("Entering channel").queue();
     }
 
+    @SuppressWarnings("unchecked")
     private void sendLeaveChannelMessage(MessageReceivedEvent event) {
         if (channel != null) {
-            String sound = getSoundStringFromListAndConfig(shutdownSoundConfig, shutdownSounds);
+            final List<@NotNull String> shutdownSounds = (List<String>) getConfigurationManager(event.getGuild()).getConfiguration("shutdownSounds");
+            assert shutdownSounds != null;
+            String sound = getFromListWithConfig(getConfigurationManager(event.getGuild()).getConfiguration("shutdownSoundConfig", SelectionFromListConfig.class), shutdownSounds);
             playAudio(event, new String[]{"", sound});
             channel.sendMessage("Leaving channel").queue();
             channel = null;
@@ -340,11 +416,11 @@ public class Main extends ListenerAdapter {
     }
 
     @NotNull
-    private String getSoundStringFromListAndConfig(SoundEffectPlayingConfiguration soundConfig, List<String> sound) {
-        return switch (soundConfig) {
-            case Last -> sound.get(sound.size() - 1);
-            case First -> sound.get(0);
-            case Random -> sound.get((int) (new Random().nextFloat() * sound.size()));
+    private <T> T getFromListWithConfig(SelectionFromListConfig selectionConfig, List<T> list) {
+        return switch (selectionConfig) {
+            case Last -> list.get(list.size() - 1);
+            case First -> list.get(0);
+            case Random -> list.get((int) (new Random().nextFloat() * list.size()));
         };
     }
 }
