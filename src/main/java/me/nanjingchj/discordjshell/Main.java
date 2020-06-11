@@ -22,31 +22,15 @@ import org.jetbrains.annotations.NotNull;
 import java.io.*;
 import java.nio.ByteBuffer;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class Main extends ListenerAdapter {
-    private volatile MessageChannel channel = null;
+    private volatile MessageChannel jShellChannel = null;
     private volatile Process jShell;
     private volatile Scanner jShellInput;
     private volatile Scanner jShellError;
     private final AudioPlayerManager playerManager = new DefaultAudioPlayerManager();
-
-    private final Runnable backupCallback = () -> {
-        // backup
-        try {
-            File f = new File("config");
-            if (!f.exists()) {
-                if (!f.createNewFile()) {
-                    throw new Error("This should never be thrown");
-                }
-            }
-            try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(f))) {
-                oos.writeObject(getConfigurations());
-                oos.flush();
-            }
-        } catch (IOException ex) {
-            ex.printStackTrace();
-        }
-    };
 
     private final Map<Guild, Queue<Pair<MessageReceivedEvent, String>>> audioQueues = new HashMap<>();
     private final Map<Guild, Boolean> playing = new HashMap<>();
@@ -61,6 +45,24 @@ public class Main extends ListenerAdapter {
         AudioSourceManagers.registerRemoteSources(playerManager);
 
         File f = new File("config");
+        // backup
+        Runnable backupCallback = () -> {
+            // backup
+            try {
+                File backupFile = new File("config");
+                if (!backupFile.exists()) {
+                    if (!backupFile.createNewFile()) {
+                        throw new Error("This should never be thrown");
+                    }
+                }
+                try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(backupFile))) {
+                    oos.writeObject(getConfigurations());
+                    oos.flush();
+                }
+            } catch (IOException ex) {
+                ex.printStackTrace();
+            }
+        };
         if (!f.exists()) {
             if (!f.createNewFile()) {
                 throw new Error("This should never be thrown");
@@ -80,7 +82,7 @@ public class Main extends ListenerAdapter {
 
         new Thread(() -> {
             for (; ; ) {
-                if (channel != null) {
+                if (jShellChannel != null) {
                     var msg = jShellInput.nextLine();
                     System.out.println(msg);
                     if (!msg.trim().isEmpty()) {
@@ -106,7 +108,7 @@ public class Main extends ListenerAdapter {
 
         new Thread(() -> {
             for (; ; ) {
-                if (channel != null) {
+                if (jShellChannel != null) {
                     var msg = jShellError.nextLine();
                     System.out.println(msg);
                     if (!msg.trim().isEmpty()) {
@@ -185,8 +187,8 @@ public class Main extends ListenerAdapter {
     }
 
     private <T> void printActiveChannel(T t) {
-        if (channel != null) {
-            channel.sendMessage(t.toString()).queue();
+        if (jShellChannel != null) {
+            jShellChannel.sendMessage(t.toString()).queue();
         }
     }
 
@@ -276,14 +278,16 @@ public class Main extends ListenerAdapter {
 
             if (msg.startsWith("#")) {
                 msg = msg.substring(1);
+                // preprocess
+                msg = preprocessUserInput(event.getGuild(), msg);
                 String[] args = msg.split(" ");
                 switch (args[0]) {
                     case "unbind" -> sendLeaveChannelMessage(event);
                     case "bind" -> {
                         sendLeaveChannelMessage(event);
                         Thread.sleep(2000);
-                        channel = event.getChannel();
-                        sendEnterChannelMessage(event, channel);
+                        jShellChannel = event.getChannel();
+                        sendEnterChannelMessage(event, jShellChannel);
                     }
                     case "restart" -> {
                         jShell.destroy();
@@ -373,8 +377,8 @@ public class Main extends ListenerAdapter {
 
             } else {
                 try {
-                    if (channel != null) {
-                        if (!event.getMessage().getAuthor().isBot() && channel.equals(event.getChannel())) {
+                    if (jShellChannel != null) {
+                        if (!event.getMessage().getAuthor().isBot() && jShellChannel.equals(event.getChannel())) {
                             jShell.getOutputStream().write((msg + "\n").getBytes());
                             jShell.getOutputStream().flush();
                         }
@@ -394,6 +398,19 @@ public class Main extends ListenerAdapter {
         }
     }
 
+    private String preprocessUserInput(Guild guild, String input) {
+        Pattern inputPattern = Pattern.compile("\\{(.*?)}");
+        Matcher matchPattern = inputPattern.matcher(input);
+        while (matchPattern.find()) {
+            String original = matchPattern.group(1);
+            String result = configurations.get(guild.getId()).getExtConfiguration(original);
+            if (result != null) {
+                input = input.replaceAll("\\{" + original + "}", result);
+            }
+        }
+        return input;
+    }
+
     @SuppressWarnings("unchecked")
     private void sendEnterChannelMessage(MessageReceivedEvent event, MessageChannel channel) {
         final List<@NotNull String> startupSounds = (List<String>) getConfigurationManager(event.getGuild()).getConfiguration("startupSounds");
@@ -405,13 +422,13 @@ public class Main extends ListenerAdapter {
 
     @SuppressWarnings("unchecked")
     private void sendLeaveChannelMessage(MessageReceivedEvent event) {
-        if (channel != null) {
+        if (jShellChannel != null) {
             final List<@NotNull String> shutdownSounds = (List<String>) getConfigurationManager(event.getGuild()).getConfiguration("shutdownSounds");
             assert shutdownSounds != null;
             String sound = getFromListWithConfig(getConfigurationManager(event.getGuild()).getConfiguration("shutdownSoundConfig", SelectionFromListConfig.class), shutdownSounds);
             playAudio(event, new String[]{"", sound});
-            channel.sendMessage("Leaving channel").queue();
-            channel = null;
+            jShellChannel.sendMessage("Leaving channel").queue();
+            jShellChannel = null;
         }
     }
 
