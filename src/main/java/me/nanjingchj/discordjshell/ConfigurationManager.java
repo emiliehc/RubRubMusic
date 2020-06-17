@@ -10,10 +10,16 @@ import java.util.Map;
 public class ConfigurationManager implements Serializable {
     private final Map<String, Object> configurations;
     private final Map<String, String> extConfigurations;
+    private transient Runnable callback;
 
-    public ConfigurationManager() {
+    public void setCallback(Runnable callback) {
+        this.callback = callback;
+    }
+
+    public ConfigurationManager(Runnable callback) {
         configurations = new HashMap<>();
         extConfigurations = new HashMap<>();
+        this.callback = callback;
     }
 
     @SuppressWarnings("unchecked")
@@ -28,6 +34,7 @@ public class ConfigurationManager implements Serializable {
 
     public synchronized void setConfiguration(@NotNull String name, Object value) {
         configurations.put(name, value);
+        callback.run();
     }
 
     @Nullable
@@ -37,5 +44,6 @@ public class ConfigurationManager implements Serializable {
 
     public synchronized void setExtConfiguration(@NotNull String name, String value) {
         extConfigurations.put(name, value);
+        callback.run();
     }
 }

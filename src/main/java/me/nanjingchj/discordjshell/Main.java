@@ -35,6 +35,23 @@ public class Main extends ListenerAdapter {
     private final Map<Guild, Queue<Pair<MessageReceivedEvent, String>>> audioQueues = new HashMap<>();
     private final Map<Guild, Boolean> playing = new HashMap<>();
     private final Map<String, ConfigurationManager> configurations;
+    private final Runnable backupCallback = () -> {
+        // backup
+        try {
+            File backupFile = new File("config");
+            if (!backupFile.exists()) {
+                if (!backupFile.createNewFile()) {
+                    throw new Error("This should never be thrown");
+                }
+            }
+            try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(backupFile))) {
+                oos.writeObject(getConfigurations());
+                oos.flush();
+            }
+        } catch (IOException ex) {
+            ex.printStackTrace();
+        }
+    };
 
     private Map<String, ConfigurationManager> getConfigurations() {
         return configurations;
@@ -46,23 +63,7 @@ public class Main extends ListenerAdapter {
 
         File f = new File("config");
         // backup
-        Runnable backupCallback = () -> {
-            // backup
-            try {
-                File backupFile = new File("config");
-                if (!backupFile.exists()) {
-                    if (!backupFile.createNewFile()) {
-                        throw new Error("This should never be thrown");
-                    }
-                }
-                try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(backupFile))) {
-                    oos.writeObject(getConfigurations());
-                    oos.flush();
-                }
-            } catch (IOException ex) {
-                ex.printStackTrace();
-            }
-        };
+
         if (!f.exists()) {
             if (!f.createNewFile()) {
                 throw new Error("This should never be thrown");
@@ -72,6 +73,9 @@ public class Main extends ListenerAdapter {
             try (ObjectInputStream oos = new ObjectInputStream(new FileInputStream(f))) {
                 configurations = (Map<String, ConfigurationManager>) oos.readObject();
                 ((CallbackHashMap<?, ?>) configurations).setCallback(backupCallback);
+                configurations.forEach((s, configurationManager) -> {
+                    configurationManager.setCallback(backupCallback);
+                });
             }
         }
 
@@ -169,7 +173,7 @@ public class Main extends ListenerAdapter {
     private synchronized ConfigurationManager getConfigurationManager(@NotNull Guild guild) {
         ConfigurationManager manager = configurations.get(guild.getId());
         if (manager == null) {
-            manager = new ConfigurationManager();
+            manager = new ConfigurationManager(backupCallback);
             initConfigurations(manager);
             configurations.put(guild.getId(), manager);
         }
