@@ -10,6 +10,7 @@ import java.util.Map;
 public class GuildConfigurationManager implements Serializable {
     private final Map<String, Object> configurations;
     private final Map<String, String> extConfigurations;
+
     public GuildConfigurationManager() {
         configurations = new HashMap<>();
         extConfigurations = new HashMap<>();
