@@ -21,7 +21,7 @@ public class Main extends ListenerAdapter {
     private volatile Scanner jShellInput;
     private volatile Scanner jShellError;
     private ConfigurationManager configurationManager;
-    private final AudioPlaybackManager audioPlaybackManager;
+    private final IAudioPlaybackManager audioPlaybackManager;
 
     public Main() throws IOException {
 
@@ -135,7 +135,7 @@ public class Main extends ListenerAdapter {
                             e.printStackTrace();
                         }
                     }
-                    case "play" -> audioPlaybackManager.play(event.getGuild(), event, args);
+                    case "play" -> audioPlaybackManager.playQueued(event.getGuild(), event, args);
                     case "skip" -> audioPlaybackManager.playAudio(event, new String[]{"", "https://www.youtube.com/watch?v=Wch3gJG2GJ4"});
                     case "set" -> {
                         switch (args[1]) {

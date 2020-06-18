@@ -21,10 +21,13 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Queue;
 
-public class AudioPlaybackManager {
+public class AudioPlaybackManager implements IAudioPlaybackManager {
     private final Map<Guild, Queue<Pair<MessageReceivedEvent, String>>> audioQueues = new HashMap<>();
     private final Map<Guild, Boolean> playing = new HashMap<>();
     private final AudioPlayerManager playerManager = new DefaultAudioPlayerManager();
+
+    private static class AudioLoadingException extends RuntimeException {
+    }
 
     @SuppressWarnings({"SynchronizationOnLocalVariableOrMethodParameter", "BusyWait"})
     public AudioPlaybackManager() {
@@ -62,8 +65,15 @@ public class AudioPlaybackManager {
         }).start();
     }
 
+    /**
+     * args[1] is the position of the url
+     *
+     * @param guild the channel
+     * @param event the event that triggers the bot to play audio
+     * @param args contains the url
+     */
     @SuppressWarnings("SynchronizationOnLocalVariableOrMethodParameter")
-    public void play(Guild guild, MessageReceivedEvent event, String[] args) {
+    public void playQueued(Guild guild, MessageReceivedEvent event, String[] args) {
         Queue<Pair<MessageReceivedEvent, String>> queue = audioQueues.get(guild);
         if (queue == null) {
             queue = new ArrayDeque<>();
@@ -123,22 +133,23 @@ public class AudioPlaybackManager {
                 loadingError[0] = true;
             }
         });
+        while (audioTrackToPlay[0] == null) {
+            Thread.onSpinWait();
+            if (loadingError[0]) {
+                throw new AudioLoadingException();
+            }
+        }
         audioManager.setSendingHandler(new AudioSendHandler() {
             private final AudioPlayer audioPlayer;
             private AudioFrame lastFrame;
 
             {
                 audioPlayer = playerManager.createPlayer();
-                while (audioTrackToPlay[0] == null) {
-                    Thread.onSpinWait();
-                    if (loadingError[0]) {
-                        throw new RuntimeException();
-                    }
-                }
                 audioPlayer.playTrack(audioTrackToPlay[0]);
                 playing.put(guild, true);
             }
 
+            // TODO : multi channel
             @Override
             public boolean canProvide() {
                 lastFrame = audioPlayer.provide();
@@ -147,6 +158,7 @@ public class AudioPlaybackManager {
                 return result;
             }
 
+            // TODO : multi channel
             @Override
             public @NotNull ByteBuffer provide20MsAudio() {
                 return ByteBuffer.wrap(lastFrame.getData());
