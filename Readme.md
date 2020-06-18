@@ -40,11 +40,5 @@ This command determines how the bot chooses its startup / shutdown sound effect 
 #### add [startup / shutdown] {YouTube URL}
 This command adds a new item to the list of startup / shutdown sound effects.
 
-## Read this document in another language
-[Deutsch][0], [中文][1]
-
 ## Contact
 If you encounter any problems while using the bot, please create a new issue in the repository. The developer will address the problem when he has time.
-
-[0]: Readme.de.md
-[1]: Readme.zh-cn.md

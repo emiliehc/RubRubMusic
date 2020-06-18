@@ -420,6 +420,7 @@ public class Main extends ListenerAdapter {
         final List<@NotNull String> startupSounds = (List<String>) getConfigurationManager(event.getGuild()).getConfiguration("startupSounds");
         assert startupSounds != null;
         String sound = getFromListWithConfig(getConfigurationManager(event.getGuild()).getConfiguration("startupSoundConfig", SelectionFromListConfig.class), startupSounds);
+
         playAudio(event, new String[]{"", sound});
         channel.sendMessage("Entering channel").queue();
     }

@@ -6,8 +6,11 @@
         <sourceOutputDir name="target/generated-sources/annotations" />
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
-        <module name="DiscordJShell" />
+        <module name="RubRubMusic" />
       </profile>
     </annotationProcessing>
+    <bytecodeTargetLevel>
+      <module name="RubRubMusic" target="14" />
+    </bytecodeTargetLevel>
   </component>
 </project>

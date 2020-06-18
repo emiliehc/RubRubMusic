@@ -46,4 +46,5 @@ public class ConfigurationManager implements Serializable {
         extConfigurations.put(name, value);
         callback.run();
     }
+
 }
