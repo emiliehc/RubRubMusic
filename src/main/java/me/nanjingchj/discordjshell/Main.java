@@ -31,34 +31,12 @@ public class Main extends ListenerAdapter {
     private volatile Scanner jShellInput;
     private volatile Scanner jShellError;
     private final AudioPlayerManager playerManager = new DefaultAudioPlayerManager();
-
+    private ConfigurationManager configurationManager;
     private final Map<Guild, Queue<Pair<MessageReceivedEvent, String>>> audioQueues = new HashMap<>();
     private final Map<Guild, Boolean> playing = new HashMap<>();
-    private final Map<String, ConfigurationManager> configurations;
-    private final Runnable backupCallback = () -> {
-        // backup
-        try {
-            File backupFile = new File("config");
-            if (!backupFile.exists()) {
-                if (!backupFile.createNewFile()) {
-                    throw new Error("This should never be thrown");
-                }
-            }
-            try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(backupFile))) {
-                oos.writeObject(getConfigurations());
-                oos.flush();
-            }
-        } catch (IOException ex) {
-            ex.printStackTrace();
-        }
-    };
 
-    private Map<String, ConfigurationManager> getConfigurations() {
-        return configurations;
-    }
-
-    @SuppressWarnings({"SynchronizationOnLocalVariableOrMethodParameter", "BusyWait", "unchecked"})
-    public Main() throws IOException, ClassNotFoundException {
+    @SuppressWarnings({"SynchronizationOnLocalVariableOrMethodParameter", "BusyWait"})
+    public Main() throws IOException {
         AudioSourceManagers.registerRemoteSources(playerManager);
 
         File f = new File("config");
@@ -68,14 +46,13 @@ public class Main extends ListenerAdapter {
             if (!f.createNewFile()) {
                 throw new Error("This should never be thrown");
             }
-            configurations = new CallbackHashMap<>(backupCallback);
+            configurationManager = new ConfigurationManager();
         } else {
             try (ObjectInputStream oos = new ObjectInputStream(new FileInputStream(f))) {
-                configurations = (Map<String, ConfigurationManager>) oos.readObject();
-                ((CallbackHashMap<?, ?>) configurations).setCallback(backupCallback);
-                configurations.forEach((s, configurationManager) -> {
-                    configurationManager.setCallback(backupCallback);
-                });
+                configurationManager = (ConfigurationManager) oos.readObject();
+            } catch (Exception e) { // TODO : narrow this down
+                e.printStackTrace();
+                configurationManager = new ConfigurationManager();
             }
         }
 
@@ -156,28 +133,6 @@ public class Main extends ListenerAdapter {
                 }
             }
         }).start();
-    }
-
-    private static void initConfigurations(ConfigurationManager configurationManager) {
-        List<@NotNull String> startupSounds = new ArrayList<>(), shutdownSounds = new ArrayList<>();
-        startupSounds.add("https://www.youtube.com/watch?v=7nQ2oiVqKHw");
-        shutdownSounds.add("https://www.youtube.com/watch?v=Gb2jGy76v0Y");
-        configurationManager.setConfiguration("startupSounds", startupSounds);
-        configurationManager.setConfiguration("shutdownSounds", shutdownSounds);
-        SelectionFromListConfig startupSoundConfig = SelectionFromListConfig.Last;
-        SelectionFromListConfig shutdownSoundConfig = SelectionFromListConfig.Last;
-        configurationManager.setConfiguration("startupSoundConfig", startupSoundConfig);
-        configurationManager.setConfiguration("shutdownSoundConfig", shutdownSoundConfig);
-    }
-
-    private synchronized ConfigurationManager getConfigurationManager(@NotNull Guild guild) {
-        ConfigurationManager manager = configurations.get(guild.getId());
-        if (manager == null) {
-            manager = new ConfigurationManager(backupCallback);
-            initConfigurations(manager);
-            configurations.put(guild.getId(), manager);
-        }
-        return manager;
     }
 
     @SuppressWarnings("deprecation")
@@ -319,7 +274,7 @@ public class Main extends ListenerAdapter {
                         }
                         String url;
                         if (args[1].equals("ext")) {
-                            url = getConfigurationManager(guild).getExtConfiguration(args[2]);
+                            url = configurationManager.getExtConfiguration(guild.getId(), args[2]);
                         } else {
                             url = args[1];
                         }
@@ -331,46 +286,50 @@ public class Main extends ListenerAdapter {
                     case "set" -> {
                         switch (args[1]) {
                             case "startup" -> {
-                                final List<@NotNull String> startupSounds = (List<String>) getConfigurationManager(event.getGuild()).getConfiguration("startupSounds");
+                                final List<@NotNull String> startupSounds = (List<String>) configurationManager.getConfiguration(event.getGuild().getId(), "startupSounds");
                                 assert startupSounds != null;
                                 startupSounds.clear();
                                 startupSounds.add(args[2].replaceAll("\"", ""));
+                                configurationManager.modified();
                             }
                             case "shutdown" -> {
-                                final List<@NotNull String> shutdownSounds = (List<String>) getConfigurationManager(event.getGuild()).getConfiguration("shutdownSounds");
+                                final List<@NotNull String> shutdownSounds = (List<String>) configurationManager.getConfiguration(event.getGuild().getId(), "shutdownSounds");
                                 assert shutdownSounds != null;
                                 shutdownSounds.clear();
                                 shutdownSounds.add(args[2].replaceAll("\"", ""));
+                                configurationManager.modified();
                             }
                             default -> throw new UnsupportedOperationException();
                         }
                     }
                     case "configure" -> {
                         switch (args[1]) {
-                            case "startup" -> getConfigurationManager(event.getGuild()).setConfiguration("startupSoundConfig", SelectionFromListConfig.valueOf(args[2]));
-                            case "shutdown" -> getConfigurationManager(event.getGuild()).setConfiguration("shutdownSoundConfig", SelectionFromListConfig.valueOf(args[2]));
-                            case "ext" -> getConfigurationManager(event.getGuild()).setExtConfiguration(args[2], args[3].equals("null") ? null : args[3]);
+                            case "startup" -> configurationManager.setConfiguration(event.getGuild().getId(), "startupSoundConfig", SelectionFromListConfig.valueOf(args[2]));
+                            case "shutdown" -> configurationManager.setConfiguration(event.getGuild().getId(), "shutdownSoundConfig", SelectionFromListConfig.valueOf(args[2]));
+                            case "ext" -> configurationManager.setExtConfiguration(event.getGuild().getId(), args[2], args[3].equals("null") ? null : args[3]);
                             default -> throw new UnsupportedOperationException();
                         }
                     }
                     case "add" -> {
                         switch (args[1]) {
                             case "startup" -> {
-                                final List<@NotNull String> startupSounds = (List<String>) getConfigurationManager(event.getGuild()).getConfiguration("startupSounds");
+                                final List<@NotNull String> startupSounds = (List<String>) configurationManager.getConfiguration(event.getGuild().getId(), "startupSounds");
                                 assert startupSounds != null;
                                 startupSounds.add(args[2].replaceAll("\"", ""));
+                                configurationManager.modified();
                             }
                             case "shutdown" -> {
-                                final List<@NotNull String> shutdownSounds = (List<String>) getConfigurationManager(event.getGuild()).getConfiguration("shutdownSounds");
+                                final List<@NotNull String> shutdownSounds = (List<String>) configurationManager.getConfiguration(event.getGuild().getId(), "shutdownSounds");
                                 assert shutdownSounds != null;
                                 shutdownSounds.add(args[2].replaceAll("\"", ""));
+                                configurationManager.modified();
                             }
                             default -> throw new UnsupportedOperationException();
                         }
                     }
                     case "readConfig" -> {
                         if ("ext".equals(args[1])) {
-                            String value = getConfigurationManager(event.getGuild()).getExtConfiguration(args[2]);
+                            String value = configurationManager.getExtConfiguration(event.getGuild().getId(), args[2]);
                             event.getChannel().sendMessage(value == null ? "null" : value).queue();
                         } else {
                             throw new UnsupportedOperationException();
@@ -407,7 +366,7 @@ public class Main extends ListenerAdapter {
         Matcher matchPattern = inputPattern.matcher(input);
         while (matchPattern.find()) {
             String original = matchPattern.group(1);
-            String result = configurations.get(guild.getId()).getExtConfiguration(original);
+            String result = configurationManager.getExtConfiguration(guild.getId(), original);
             if (result != null) {
                 input = input.replaceAll("\\{" + original + "}", result);
             }
@@ -417,9 +376,9 @@ public class Main extends ListenerAdapter {
 
     @SuppressWarnings("unchecked")
     private void sendEnterChannelMessage(MessageReceivedEvent event, MessageChannel channel) {
-        final List<@NotNull String> startupSounds = (List<String>) getConfigurationManager(event.getGuild()).getConfiguration("startupSounds");
+        final List<@NotNull String> startupSounds = (List<String>) configurationManager.getConfiguration(event.getGuild().getId(), "startupSounds");
         assert startupSounds != null;
-        String sound = getFromListWithConfig(getConfigurationManager(event.getGuild()).getConfiguration("startupSoundConfig", SelectionFromListConfig.class), startupSounds);
+        String sound = getFromListWithConfig(configurationManager.getConfiguration(event.getGuild().getId(), "startupSoundConfig", SelectionFromListConfig.class), startupSounds);
 
         playAudio(event, new String[]{"", sound});
         channel.sendMessage("Entering channel").queue();
@@ -428,9 +387,9 @@ public class Main extends ListenerAdapter {
     @SuppressWarnings("unchecked")
     private void sendLeaveChannelMessage(MessageReceivedEvent event) {
         if (jShellChannel != null) {
-            final List<@NotNull String> shutdownSounds = (List<String>) getConfigurationManager(event.getGuild()).getConfiguration("shutdownSounds");
+            final List<@NotNull String> shutdownSounds = (List<String>) configurationManager.getConfiguration(event.getGuild().getId(), "shutdownSounds");
             assert shutdownSounds != null;
-            String sound = getFromListWithConfig(getConfigurationManager(event.getGuild()).getConfiguration("shutdownSoundConfig", SelectionFromListConfig.class), shutdownSounds);
+            String sound = getFromListWithConfig(configurationManager.getConfiguration(event.getGuild().getId(), "shutdownSoundConfig", SelectionFromListConfig.class), shutdownSounds);
             playAudio(event, new String[]{"", sound});
             jShellChannel.sendMessage("Leaving channel").queue();
             jShellChannel = null;
