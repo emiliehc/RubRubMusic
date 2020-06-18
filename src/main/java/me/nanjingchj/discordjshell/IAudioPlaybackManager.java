@@ -21,4 +21,6 @@ public interface IAudioPlaybackManager {
      * @param args contains the url
      */
     void playAudio(@NotNull MessageReceivedEvent event, String[] args);
+
+    void skip(@NotNull MessageReceivedEvent event);
 }

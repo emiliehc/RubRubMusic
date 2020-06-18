@@ -70,7 +70,7 @@ public class AudioPlaybackManager implements IAudioPlaybackManager {
      *
      * @param guild the channel
      * @param event the event that triggers the bot to play audio
-     * @param args contains the url
+     * @param args  contains the url
      */
     @SuppressWarnings("SynchronizationOnLocalVariableOrMethodParameter")
     public void playQueued(Guild guild, MessageReceivedEvent event, String[] args) {
@@ -149,7 +149,6 @@ public class AudioPlaybackManager implements IAudioPlaybackManager {
                 playing.put(guild, true);
             }
 
-            // TODO : multi channel
             @Override
             public boolean canProvide() {
                 lastFrame = audioPlayer.provide();
@@ -158,7 +157,6 @@ public class AudioPlaybackManager implements IAudioPlaybackManager {
                 return result;
             }
 
-            // TODO : multi channel
             @Override
             public @NotNull ByteBuffer provide20MsAudio() {
                 return ByteBuffer.wrap(lastFrame.getData());
@@ -170,5 +168,10 @@ public class AudioPlaybackManager implements IAudioPlaybackManager {
             }
         });
         audioManager.openAudioConnection(musicChannel);
+    }
+
+    @Override
+    public void skip(@NotNull MessageReceivedEvent event) {
+        playAudio(event, new String[]{"", "https://www.youtube.com/watch?v=Wch3gJG2GJ4"});
     }
 }

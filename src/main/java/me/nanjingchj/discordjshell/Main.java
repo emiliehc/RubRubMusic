@@ -87,7 +87,7 @@ public class Main extends ListenerAdapter {
 
         }).start();
 
-        audioPlaybackManager = new AudioPlaybackManager();
+        audioPlaybackManager = new MultiSourceAudioPlaybackManager();
     }
 
     @SuppressWarnings("deprecation")
@@ -136,7 +136,7 @@ public class Main extends ListenerAdapter {
                         }
                     }
                     case "play" -> audioPlaybackManager.playQueued(event.getGuild(), event, args);
-                    case "skip" -> audioPlaybackManager.playAudio(event, new String[]{"", "https://www.youtube.com/watch?v=Wch3gJG2GJ4"});
+                    case "skip" -> audioPlaybackManager.skip(event);
                     case "set" -> {
                         switch (args[1]) {
                             case "startup" -> {
