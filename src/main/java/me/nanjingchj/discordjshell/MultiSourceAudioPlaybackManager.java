@@ -163,8 +163,10 @@ public class MultiSourceAudioPlaybackManager implements IAudioPlaybackManager {
         }
 
         public void forcePlay(AudioTrack track) {
-            playingInjectedTrack = true;
-            backupTrack = activeTrack;
+            if (!playingInjectedTrack) {
+                playingInjectedTrack = true;
+                backupTrack = activeTrack;
+            }
             activeTrack = track;
             audioPlayer.playTrack(activeTrack);
         }
