@@ -1,14 +1,9 @@
 package me.nanjingchj.discordjshell;
 
-import com.sedmelluq.discord.lavaplayer.player.AudioLoadResultHandler;
 import com.sedmelluq.discord.lavaplayer.player.AudioPlayer;
 import com.sedmelluq.discord.lavaplayer.player.AudioPlayerManager;
 import com.sedmelluq.discord.lavaplayer.player.DefaultAudioPlayerManager;
-import com.sedmelluq.discord.lavaplayer.source.AudioSourceManager;
 import com.sedmelluq.discord.lavaplayer.source.AudioSourceManagers;
-import com.sedmelluq.discord.lavaplayer.source.youtube.YoutubeAudioTrack;
-import com.sedmelluq.discord.lavaplayer.tools.FriendlyException;
-import com.sedmelluq.discord.lavaplayer.track.AudioPlaylist;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrackState;
 import com.sedmelluq.discord.lavaplayer.track.playback.AudioFrame;
@@ -45,19 +40,22 @@ public class MultiSourceAudioPlaybackManager implements IAudioPlaybackManager {
      * so that this function stays responsive.
      */
     @Override
-    public void playQueued(Guild guild, MessageReceivedEvent event, String[] args) {
+    public void playQueued(Guild guild, String[] args) {
         String url = args[1];
 
-        AudioTrack track = loadTrack(event, guild, url);
+        AudioTrack track = IAudioPlaybackManager.loadTrack(playerManager, url);
+        playQueued(guild, track);
+    }
+
+    @Override
+    public void playQueued(Guild guild, AudioTrack track) {
         var audioManager = guild.getAudioManager();
         ChannelWideAudioSendHandler handler = (ChannelWideAudioSendHandler) audioManager.getSendingHandler();
         if (handler == null) {
-            // first time
-            handler = new ChannelWideAudioSendHandler(guild);
+            handler = new ChannelWideAudioSendHandler();
             audioManager.setSendingHandler(handler);
             audioManager.openAudioConnection(getMusicChannel(guild));
         }
-
         handler.addTrack(track);
     }
 
@@ -69,63 +67,29 @@ public class MultiSourceAudioPlaybackManager implements IAudioPlaybackManager {
         ChannelWideAudioSendHandler handler = (ChannelWideAudioSendHandler) audioManager.getSendingHandler();
         if (handler == null) {
             // first time
-            handler = new ChannelWideAudioSendHandler(event.getGuild());
+            handler = new ChannelWideAudioSendHandler();
             audioManager.setSendingHandler(handler);
             audioManager.openAudioConnection(getMusicChannel(event.getGuild()));
         }
 
-        handler.forcePlay(loadTrack(event, event.getGuild(), url));
-    }
-
-    private AudioTrack loadTrack(MessageReceivedEvent event, Guild guild, String url) {
-        final AudioTrack[] audioTrackToPlay = new AudioTrack[1];
-        final boolean[] loadingError = {false};
-        playerManager.loadItem(url, new AudioLoadResultHandler() {
-            @Override
-            public void trackLoaded(AudioTrack audioTrack) {
-                System.out.println(audioTrack.getInfo().uri);
-                audioTrackToPlay[0] = audioTrack;
-            }
-
-            @Override
-            public void playlistLoaded(AudioPlaylist audioPlaylist) {
-                audioTrackToPlay[0] = audioPlaylist.getTracks().get(0);
-                System.out.println(audioTrackToPlay[0].getInfo().uri);
-            }
-
-            @Override
-            public void noMatches() {
-                System.err.println("No matches");
-                event.getChannel().sendMessage("No matches").queue();
-                loadingError[0] = true;
-            }
-
-            @Override
-            public void loadFailed(FriendlyException e) {
-                e.printStackTrace();
-                loadingError[0] = true;
-            }
-        });
-        while (audioTrackToPlay[0] == null) {
-            Thread.onSpinWait();
-            if (loadingError[0]) {
-                throw new RuntimeException();
-                // method returns
-            }
-        }
-        return audioTrackToPlay[0];
+        handler.forcePlay(IAudioPlaybackManager.loadTrack(playerManager, url));
     }
 
     @Override
-    public void skip(@NotNull MessageReceivedEvent event) {
-        ChannelWideAudioSendHandler handler = (ChannelWideAudioSendHandler) event.getGuild().getAudioManager().getSendingHandler();
+    public void skip(@NotNull Guild guild) {
+        ChannelWideAudioSendHandler handler = (ChannelWideAudioSendHandler) guild.getAudioManager().getSendingHandler();
         if (handler == null) {
             // first time
-            handler = new ChannelWideAudioSendHandler(event.getGuild());
-            event.getGuild().getAudioManager().setSendingHandler(handler);
-            event.getGuild().getAudioManager().openAudioConnection(getMusicChannel(event.getGuild()));
+            handler = new ChannelWideAudioSendHandler();
+            guild.getAudioManager().setSendingHandler(handler);
+            guild.getAudioManager().openAudioConnection(getMusicChannel(guild));
         }
         handler.skip();
+    }
+
+    @Override
+    public AudioPlayerManager getAudioPlayerManger() {
+        return playerManager;
     }
 
     private VoiceChannel getMusicChannel(Guild guild) {
@@ -139,7 +103,6 @@ public class MultiSourceAudioPlaybackManager implements IAudioPlaybackManager {
     }
 
     private class ChannelWideAudioSendHandler implements AudioSendHandler {
-        private final Guild guild;
         private final AudioPlayer audioPlayer;
         private final Queue<AudioTrack> audioTracks;
         private AudioTrack backupTrack = null;
@@ -148,14 +111,9 @@ public class MultiSourceAudioPlaybackManager implements IAudioPlaybackManager {
         private AudioFrame lastFrame;
 
         // ctor
-        public ChannelWideAudioSendHandler(Guild guild) {
-            this.guild = guild;
+        public ChannelWideAudioSendHandler() {
             audioTracks = new ArrayDeque<>(10);
             audioPlayer = playerManager.createPlayer();
-        }
-
-        public Guild getGuild() {
-            return guild;
         }
 
         public void addTrack(AudioTrack track) {
