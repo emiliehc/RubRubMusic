@@ -10,7 +10,9 @@ import java.util.List;
 import java.util.Map;
 
 public class ConfigurationManager implements Serializable {
-    private final Map<String, GuildConfigurationManager> configurationManagers;
+    private static final long serialVersionUID = -7243879225592588617L;
+
+    private Map<String, GuildConfigurationManager> configurationManagers;
     private transient volatile boolean modified = false;
 
     public ConfigurationManager() {
@@ -58,6 +60,7 @@ public class ConfigurationManager implements Serializable {
         guildConfigurationManager.setConfiguration("shutdownSoundConfig", shutdownSoundConfig);
     }
 
+    @SuppressWarnings("SynchronizeOnNonFinalField")
     private GuildConfigurationManager getConfigurationManager(@NotNull String guildID) {
         GuildConfigurationManager manager = configurationManagers.get(guildID);
         if (manager == null) {
@@ -71,7 +74,7 @@ public class ConfigurationManager implements Serializable {
         return manager;
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "unused"})
     public <T> T getConfiguration(@NotNull String guildID, @NotNull String name, @NotNull Class<T> type) {
         try {
             modified = true;
@@ -116,6 +119,25 @@ public class ConfigurationManager implements Serializable {
             getConfigurationManager(guildID).setExtConfiguration(name, value);
         } finally {
             backup();
+        }
+    }
+
+    private void readObject(ObjectInputStream ois) throws ClassNotFoundException, IOException {
+        int size = ois.readInt();
+        configurationManagers = new HashMap<>(size);
+        for (int i = 0; i < size; i++) {
+            String key = (String) ois.readObject();
+            GuildConfigurationManager value = (GuildConfigurationManager) ois.readObject();
+            configurationManagers.put(key, value);
+        }
+    }
+
+    private void writeObject(ObjectOutputStream oos) throws IOException {
+        int size = configurationManagers.size();
+        oos.writeInt(size);
+        for (Map.Entry<String, GuildConfigurationManager> entry : configurationManagers.entrySet()) {
+            oos.writeObject(entry.getKey());
+            oos.writeObject(entry.getValue());
         }
     }
 }

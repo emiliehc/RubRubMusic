@@ -13,6 +13,8 @@ import java.util.LinkedList;
 import java.util.List;
 
 public class DefaultPlaylist implements IPlaylist, Serializable {
+    private static final long serialVersionUID = 8858567088676731401L;
+
     private String name;
     private List<String> audioTrackStrings;
     private transient List<AudioTrack> audioTracks;
@@ -67,16 +69,23 @@ public class DefaultPlaylist implements IPlaylist, Serializable {
         resetPosition();
     }
 
-    @SuppressWarnings("unchecked")
-    private void readObject(ObjectInputStream inputStream) throws ClassNotFoundException, IOException {
-        name = (String) inputStream.readObject();
-        audioTrackStrings = (List<String>) inputStream.readObject();
+    private void readObject(ObjectInputStream ios) throws ClassNotFoundException, IOException {
+        name = (String) ios.readObject();
+        int size = ios.readInt();
+        audioTrackStrings = new ArrayList<>(size);
+        for (int i = 0; i < size; i++) {
+            audioTrackStrings.add((String)ios.readObject());
+        }
         reload(Main.audioPlaybackManager.getAudioPlayerManger());
     }
 
-    private void writeObject(ObjectOutputStream outputStream) throws IOException {
-        outputStream.writeObject(name);
-        outputStream.writeObject(audioTrackStrings);
+    private void writeObject(ObjectOutputStream oos) throws IOException {
+        oos.writeObject(name);
+        int size = audioTrackStrings.size();
+        oos.writeInt(size);
+        for (String audioTrackString : audioTrackStrings) {
+            oos.writeObject(audioTrackString);
+        }
     }
 
     @Override
@@ -114,4 +123,6 @@ public class DefaultPlaylist implements IPlaylist, Serializable {
     public void setName(String name) {
         this.name = name;
     }
+
+
 }

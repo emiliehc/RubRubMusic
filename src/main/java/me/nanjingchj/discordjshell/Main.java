@@ -29,6 +29,7 @@ public class Main extends ListenerAdapter {
         audioPlaybackManager = new MultiSourceAudioPlaybackManager();
     }
 
+    @SuppressWarnings("BusyWait")
     public Main() throws IOException {
 
         File f = new File("config");
@@ -45,6 +46,7 @@ public class Main extends ListenerAdapter {
             } catch (Exception e) { // TODO : narrow this down
                 e.printStackTrace();
                 configurationManager = new ConfigurationManager();
+                configurationManager.modified();
             }
         }
 
@@ -61,6 +63,12 @@ public class Main extends ListenerAdapter {
                     if (!msg.trim().isEmpty()) {
                         printActiveChannel(msg);
                     }
+                } else {
+                    try {
+                        Thread.sleep(200);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
                 }
             }
         }).start();
@@ -68,12 +76,20 @@ public class Main extends ListenerAdapter {
         new Thread(() -> {
             Scanner sc = new Scanner(System.in);
             for (; ; ) {
-                var str = sc.nextLine();
-                try {
-                    jShell.getOutputStream().write((str + "\n").getBytes());
-                    jShell.getOutputStream().flush();
-                } catch (IOException e) {
-                    e.printStackTrace();
+                if (sc.hasNextLine()) {
+                    var str = sc.nextLine();
+                    try {
+                        jShell.getOutputStream().write((str + "\n").getBytes());
+                        jShell.getOutputStream().flush();
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                } else {
+                    try {
+                        Thread.sleep(200);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
                 }
             }
         }).start();
@@ -82,12 +98,25 @@ public class Main extends ListenerAdapter {
         new Thread(() -> {
             for (; ; ) {
                 if (jShellChannel != null) {
-                    var msg = jShellError.nextLine();
-                    System.out.println(msg);
-                    if (!msg.trim().isEmpty()) {
-                        printActiveChannel(msg.concat("\n"));
+                    if (jShellError.hasNextLine()) {
+                        var msg = jShellError.nextLine();
+                        System.out.println(msg);
+                        if (!msg.trim().isEmpty()) {
+                            printActiveChannel(msg.concat("\n"));
+                        }
+                    } else {
+                        try {
+                            Thread.sleep(200);
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
+                        }
                     }
-
+                } else {
+                    try {
+                        Thread.sleep(200);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
                 }
             }
 

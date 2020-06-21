@@ -144,14 +144,21 @@ public class MultiSourceAudioPlaybackManager implements IAudioPlaybackManager {
         public boolean canProvide() {
             lastFrame = audioPlayer.provide();
             if (lastFrame == null) {
+                // no track to play, or finished
                 if (activeTrack == null || activeTrack.getState() == AudioTrackState.FINISHED) {
                     if (playingInjectedTrack) {
                         // restore previous track
-                        activeTrack = backupTrack.makeClone();
-                        activeTrack.setPosition(backupTrack.getPosition());
-                        backupTrack = null;
-                        playingInjectedTrack = false;
+                        if (backupTrack != null) {
+                            activeTrack = backupTrack.makeClone();
+                            activeTrack.setPosition(backupTrack.getPosition());
+                            backupTrack = null;
+                            playingInjectedTrack = false;
+                        } else {
+                            // no previous track
+                            return false;
+                        }
                     } else {
+                        // play the next available track
                         AudioTrack next = audioTracks.poll();
                         if (next == null) {
                             return false;

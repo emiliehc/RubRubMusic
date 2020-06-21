@@ -3,13 +3,18 @@ package me.nanjingchj.discordjshell;
 import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.Nullable;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
 
 public class GuildConfigurationManager implements Serializable {
-    private final Map<String, Object> configurations;
-    private final Map<String, String> extConfigurations;
+    private static final long serialVersionUID = 15215608478978828L;
+
+    private Map<String, Object> configurations;
+    private Map<String, String> extConfigurations;
 
     public GuildConfigurationManager() {
         configurations = new HashMap<>();
@@ -39,4 +44,36 @@ public class GuildConfigurationManager implements Serializable {
         extConfigurations.put(name, value);
     }
 
+    private void readObject(ObjectInputStream ois) throws ClassNotFoundException, IOException {
+        int configSize = ois.readInt();
+        configurations = new HashMap<>(configSize);
+        for (int i = 0; i < configSize; i++) {
+            String key = (String) ois.readObject();
+            Object value = ois.readObject();
+            configurations.put(key, value);
+        }
+
+        int extSize = ois.readInt();
+        extConfigurations = new HashMap<>(extSize);
+        for (int i = 0; i < extSize; i++) {
+            String key = (String) ois.readObject();
+            String value = (String) ois.readObject();
+            extConfigurations.put(key, value);
+        }
+    }
+
+    private void writeObject(ObjectOutputStream oos) throws IOException {
+        int configSize = configurations.size();
+        oos.writeInt(configSize);
+        for (Map.Entry<String, Object> entry : configurations.entrySet()) {
+            oos.writeObject(entry.getKey());
+            oos.writeObject(entry.getValue());
+        }
+        int extSize = extConfigurations.size();
+        oos.writeInt(extSize);
+        for (Map.Entry<String, String> entry : extConfigurations.entrySet()) {
+            oos.writeObject(entry.getKey());
+            oos.writeObject(entry.getValue());
+        }
+    }
 }
