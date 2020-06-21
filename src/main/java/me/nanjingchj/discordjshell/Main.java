@@ -31,7 +31,6 @@ public class Main extends ListenerAdapter {
 
     @SuppressWarnings("BusyWait")
     public Main() throws IOException {
-
         File f = new File("config");
         // backup
 
@@ -169,6 +168,17 @@ public class Main extends ListenerAdapter {
                         }
                     }
                     case "play" -> audioPlaybackManager.playQueued(event.getGuild(), args);
+                    case "search" -> {
+                        String queryTerms = msg.substring(7);
+                        String url = "https://www.youtube.com/watch?v=" + YouTubeSearch.search(queryTerms);
+                        event.getChannel().sendMessage("Found: " + url).queue();
+                    }
+                    case "playSearch" -> {
+                        String queryTerms = msg.substring(11);
+                        String url = "https://www.youtube.com/watch?v=" + YouTubeSearch.search(queryTerms);
+                        event.getChannel().sendMessage("▶ Found: " + url + "\nAdded to queue").queue();
+                        audioPlaybackManager.playQueued(event.getGuild(), new String[]{"", url});
+                    }
                     case "skip" -> audioPlaybackManager.skip(event.getGuild());
                     case "set" -> {
                         switch (args[1]) {

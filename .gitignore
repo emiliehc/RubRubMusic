@@ -2,3 +2,7 @@
 /target
 token.txt
 config
+apikey
+clientid
+clientsecret
+client.json
