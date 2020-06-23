@@ -8,12 +8,13 @@ import net.dv8tion.jda.api.entities.MessageChannel;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.io.*;
-import java.util.List;
-import java.util.Objects;
-import java.util.Random;
-import java.util.Scanner;
+import java.lang.reflect.Method;
+import java.util.*;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -166,6 +167,51 @@ public class Main extends ListenerAdapter {
                         } catch (IOException e) {
                             e.printStackTrace();
                         }
+                    }
+                    case "run" -> {
+                        Function<String, @Nullable Class<?>> getPrimitiveClass = s -> switch (s) {
+                            case "byte" -> byte.class;
+                            case "short" -> short.class;
+                            case "int" -> int.class;
+                            case "long" -> long.class;
+                            case "float" -> float.class;
+                            case "double" -> double.class;
+                            case "boolean", "bool" -> boolean.class;
+                            case "char" -> char.class;
+                            default -> null;
+                        };
+
+                        BiFunction<String, Class<?>, @Nullable Object> parseArg = (s, clazz) -> {
+                            if (clazz.equals(int.class)) {
+                                return Integer.parseInt(s);
+                            } else if (clazz.equals(double.class)) {
+                                return Double.parseDouble(s);
+                            } else {
+                                return null;
+                            }
+                        };
+
+                        Class<?> cls = Main.class.getClassLoader().loadClass(args[1]);
+                        int numArgs = Integer.parseInt(args[3]);
+                        List<@NotNull Class<?>> params = new ArrayList<>(numArgs);
+                        for (int i = 4; i < 4 + numArgs; i++) {
+                            Class<?> primitiveClass = getPrimitiveClass.apply(args[i]);
+                            if (primitiveClass == null) {
+                                params.add(Main.class.getClassLoader().loadClass(args[i]));
+                            } else {
+                                params.add(primitiveClass);
+                            }
+                        }
+                        Class<?>[] arr = new Class<?>[numArgs];
+                        for (int i = 0; i < numArgs; i++) {
+                            arr[i] = params.get(i);
+                        }
+                        Method method = cls.getMethod(args[2], arr);
+                        List<Object> methodArgs = new ArrayList<>(numArgs);
+                        for (int i = 4 + numArgs; i < 4 + 2 * numArgs; i++) {
+                            methodArgs.add(parseArg.apply(args[i], arr[i - 4 - numArgs]));
+                        }
+                        method.invoke(null, methodArgs.toArray());
                     }
                     case "play" -> audioPlaybackManager.playQueued(event.getGuild(), args);
                     case "search" -> {
