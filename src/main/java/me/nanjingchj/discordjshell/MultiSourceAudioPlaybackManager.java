@@ -88,6 +88,30 @@ public class MultiSourceAudioPlaybackManager implements IAudioPlaybackManager {
     }
 
     @Override
+    public void pause(@NotNull Guild guild) {
+        ChannelWideAudioSendHandler handler = (ChannelWideAudioSendHandler) guild.getAudioManager().getSendingHandler();
+        if (handler == null) {
+            // first time
+            handler = new ChannelWideAudioSendHandler();
+            guild.getAudioManager().setSendingHandler(handler);
+            guild.getAudioManager().openAudioConnection(getMusicChannel(guild));
+        }
+        handler.pause();
+    }
+
+    @Override
+    public void unpause(@NotNull Guild guild) {
+        ChannelWideAudioSendHandler handler = (ChannelWideAudioSendHandler) guild.getAudioManager().getSendingHandler();
+        if (handler == null) {
+            // first time
+            handler = new ChannelWideAudioSendHandler();
+            guild.getAudioManager().setSendingHandler(handler);
+            guild.getAudioManager().openAudioConnection(getMusicChannel(guild));
+        }
+        handler.unpause();
+    }
+
+    @Override
     public AudioPlayerManager getAudioPlayerManger() {
         return playerManager;
     }
@@ -109,6 +133,7 @@ public class MultiSourceAudioPlaybackManager implements IAudioPlaybackManager {
         private boolean playingInjectedTrack = false;
         private AudioTrack activeTrack = null;
         private AudioFrame lastFrame;
+        private volatile boolean paused = false;
 
         // ctor
         public ChannelWideAudioSendHandler() {
@@ -140,36 +165,48 @@ public class MultiSourceAudioPlaybackManager implements IAudioPlaybackManager {
             audioPlayer.playTrack(activeTrack);
         }
 
+        public void pause() {
+            paused = true;
+        }
+
+        public void unpause() {
+            paused = false;
+        }
+
         @Override
         public boolean canProvide() {
-            lastFrame = audioPlayer.provide();
-            if (lastFrame == null) {
-                // no track to play, or finished
-                if (activeTrack == null || activeTrack.getState() == AudioTrackState.FINISHED) {
-                    if (playingInjectedTrack) {
-                        // restore previous track
-                        if (backupTrack != null) {
-                            activeTrack = backupTrack.makeClone();
-                            activeTrack.setPosition(backupTrack.getPosition());
-                            backupTrack = null;
-                            playingInjectedTrack = false;
+            if (!paused || playingInjectedTrack) {
+                lastFrame = audioPlayer.provide();
+                if (lastFrame == null) {
+                    // no track to play, or finished
+                    if (activeTrack == null || activeTrack.getState() == AudioTrackState.FINISHED) {
+                        if (playingInjectedTrack) {
+                            // restore previous track
+                            if (backupTrack != null) {
+                                activeTrack = backupTrack.makeClone();
+                                activeTrack.setPosition(backupTrack.getPosition());
+                                backupTrack = null;
+                                playingInjectedTrack = false;
+                            } else {
+                                // no previous track
+                                return false;
+                            }
                         } else {
-                            // no previous track
-                            return false;
+                            // play the next available track
+                            AudioTrack next = audioTracks.poll();
+                            if (next == null) {
+                                return false;
+                            }
+                            activeTrack = next;
                         }
-                    } else {
-                        // play the next available track
-                        AudioTrack next = audioTracks.poll();
-                        if (next == null) {
-                            return false;
-                        }
-                        activeTrack = next;
-                    }
 
-                    audioPlayer.playTrack(activeTrack);
+                        audioPlayer.playTrack(activeTrack);
+                    }
                 }
+                return lastFrame != null;
+            } else {
+                return false;
             }
-            return lastFrame != null;
         }
 
         @Nullable

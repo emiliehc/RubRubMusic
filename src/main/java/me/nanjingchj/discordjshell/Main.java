@@ -214,6 +214,8 @@ public class Main extends ListenerAdapter {
                         method.invoke(null, methodArgs.toArray());
                     }
                     case "play" -> audioPlaybackManager.playQueued(event.getGuild(), args);
+                    case "pause" -> audioPlaybackManager.pause(event.getGuild());
+                    case "unpause" -> audioPlaybackManager.unpause(event.getGuild());
                     case "search" -> {
                         String queryTerms = msg.substring(7);
                         String url = "https://www.youtube.com/watch?v=" + YouTubeSearch.search(queryTerms);

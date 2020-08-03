@@ -30,6 +30,10 @@ public interface IAudioPlaybackManager {
 
     void skip(@NotNull Guild event);
 
+    void pause(@NotNull Guild guild);
+
+    void unpause(@NotNull Guild guild);
+
     AudioPlayerManager getAudioPlayerManger();
 
     static AudioTrack loadTrack(AudioPlayerManager playerManager, String url) {
