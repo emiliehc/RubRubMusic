@@ -112,8 +112,32 @@ public class MultiSourceAudioPlaybackManager implements IAudioPlaybackManager {
     }
 
     @Override
+    public void fastForward(Guild guild, double seconds) {
+        ChannelWideAudioSendHandler handler = (ChannelWideAudioSendHandler) guild.getAudioManager().getSendingHandler();
+        if (handler == null) {
+            // first time
+            handler = new ChannelWideAudioSendHandler();
+            guild.getAudioManager().setSendingHandler(handler);
+            guild.getAudioManager().openAudioConnection(getMusicChannel(guild));
+        }
+        handler.fastForward(seconds);
+    }
+
+    @Override
     public AudioPlayerManager getAudioPlayerManger() {
         return playerManager;
+    }
+
+    @Override
+    public void seek(Guild guild, double seconds) {
+        ChannelWideAudioSendHandler handler = (ChannelWideAudioSendHandler) guild.getAudioManager().getSendingHandler();
+        if (handler == null) {
+            // first time
+            handler = new ChannelWideAudioSendHandler();
+            guild.getAudioManager().setSendingHandler(handler);
+            guild.getAudioManager().openAudioConnection(getMusicChannel(guild));
+        }
+        handler.seek(seconds);
     }
 
     private VoiceChannel getMusicChannel(Guild guild) {
@@ -132,7 +156,7 @@ public class MultiSourceAudioPlaybackManager implements IAudioPlaybackManager {
         private AudioTrack backupTrack = null;
         private boolean playingInjectedTrack = false;
         private AudioTrack activeTrack = null;
-        private AudioFrame lastFrame;
+        private volatile AudioFrame lastFrame;
         private volatile boolean paused = false;
 
         // ctor
@@ -171,6 +195,18 @@ public class MultiSourceAudioPlaybackManager implements IAudioPlaybackManager {
 
         public void unpause() {
             paused = false;
+        }
+
+        public void fastForward(double seconds) {
+            if (!playingInjectedTrack) {
+                activeTrack.setPosition(activeTrack.getPosition() + (long) (seconds * 1000));
+            }
+        }
+
+        public void seek(double seconds) {
+            if (!playingInjectedTrack) {
+                activeTrack.setPosition((long) (seconds * 1000));
+            }
         }
 
         @Override

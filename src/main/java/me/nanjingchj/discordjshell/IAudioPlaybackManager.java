@@ -34,6 +34,8 @@ public interface IAudioPlaybackManager {
 
     void unpause(@NotNull Guild guild);
 
+    void fastForward(Guild guild, double seconds);
+
     AudioPlayerManager getAudioPlayerManger();
 
     static AudioTrack loadTrack(AudioPlayerManager playerManager, String url) {
@@ -73,4 +75,6 @@ public interface IAudioPlaybackManager {
         }
         return audioTrackToPlay[0];
     }
+
+    void seek(Guild guild, double seconds);
 }

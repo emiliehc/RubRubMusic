@@ -216,12 +216,14 @@ public class Main extends ListenerAdapter {
                     case "play" -> audioPlaybackManager.playQueued(event.getGuild(), args);
                     case "pause" -> audioPlaybackManager.pause(event.getGuild());
                     case "unpause" -> audioPlaybackManager.unpause(event.getGuild());
+                    case "fastForward", "fastforward" -> audioPlaybackManager.fastForward(event.getGuild(), Double.parseDouble(args[1]));
+                    case "seek" -> audioPlaybackManager.seek(event.getGuild(), Double.parseDouble(args[1]));
                     case "search" -> {
                         String queryTerms = msg.substring(7);
                         String url = "https://www.youtube.com/watch?v=" + YouTubeSearch.search(queryTerms);
                         event.getChannel().sendMessage("Found: " + url).queue();
                     }
-                    case "playSearch" -> {
+                    case "playSearch", "playsearch" -> {
                         String queryTerms = msg.substring(11);
                         String url = "https://www.youtube.com/watch?v=" + YouTubeSearch.search(queryTerms);
                         event.getChannel().sendMessage("▶ Found: " + url + "\nAdded to queue").queue();
@@ -272,7 +274,7 @@ public class Main extends ListenerAdapter {
                             default -> throw new UnsupportedOperationException();
                         }
                     }
-                    case "readConfig" -> {
+                    case "readConfig", "readconfig" -> {
                         if ("ext".equals(args[1])) {
                             String value = configurationManager.getExtConfiguration(event.getGuild().getId(), args[2]);
                             event.getChannel().sendMessage(value == null ? "null" : value).queue();
@@ -288,17 +290,17 @@ public class Main extends ListenerAdapter {
                         }
                         switch (args[1]) {
                             case "load" -> playlistManager.setActivePlaylist(Objects.requireNonNull(playlistManager.getList(args[2])));
-                            case "addItem" -> {
+                            case "addItem", "additem" -> {
                                 String url = args[2];
                                 AudioTrack track = IAudioPlaybackManager.loadTrack(audioPlaybackManager.getAudioPlayerManger(), url);
                                 Objects.requireNonNull(playlistManager.getActivePlaylist()).add(track);
                                 configurationManager.modified();
                             }
-                            case "removeItem" -> {
+                            case "removeItem", "removeitem" -> {
                                 Objects.requireNonNull(playlistManager.getActivePlaylist()).removeCurrent();
                                 configurationManager.modified();
                             }
-                            case "insertItem" -> {
+                            case "insertItem", "insertitem" -> {
                                 String url = args[2];
                                 AudioTrack track = IAudioPlaybackManager.loadTrack(audioPlaybackManager.getAudioPlayerManger(), url);
                                 Objects.requireNonNull(playlistManager.getActivePlaylist()).insert(track);
@@ -330,8 +332,8 @@ public class Main extends ListenerAdapter {
                                 Objects.requireNonNull(playlistManager.getActivePlaylist()).clear();
                                 configurationManager.modified();
                             }
-                            case "resetPos" -> Objects.requireNonNull(playlistManager.getActivePlaylist()).resetPosition();
-                            case "addAll" -> Objects.requireNonNull(playlistManager.getActivePlaylist()).playAll(audioPlaybackManager, event.getGuild());
+                            case "resetPos", "resetpos" -> Objects.requireNonNull(playlistManager.getActivePlaylist()).resetPosition();
+                            case "addAll", "addall" -> Objects.requireNonNull(playlistManager.getActivePlaylist()).playAll(audioPlaybackManager, event.getGuild());
                             default -> throw new UnsupportedOperationException("Unknown command");
                         }
                     }
