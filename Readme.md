@@ -11,13 +11,6 @@ Please contact the developer if you believe that the link is no longer valid.
 
 ## List of all commands
 All commands supported by RubRubMusic begin with this symbol: #
-### JShell commands
-CAUTION: The following 2 commands have nothing to do with the bot's music playback function.
-#### bind
-For technical reasons, the bot can only be bound to one channel from one server at a time. Therefore, you must first enter `` #bind '' before using JShell.
-
-#### unbind
-This command is used when you want to unbind JShell from the channel.
 
 ### Music playback
 #### play
@@ -27,13 +20,19 @@ This command is used when you want to unbind JShell from the channel.
 #### skip
 skips the current audio track
 
-#### playSearch {search terms}
+#### playsearch {search terms}
 1. searches videos on youtube and plays the most relevant one
 2. spaces are allowed in the search term
 
 #### search {search terms}
 1. searches videos on youtube and returns the most relevant search result as a URL
 2. spaces are allowed in the search term
+
+#### pause
+#### unpause
+#### resume
+#### seek {time}
+#### fastforward {time}
 
 #### playlist {option} {argument}
 Options:
