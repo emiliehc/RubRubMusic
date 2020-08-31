@@ -29,9 +29,22 @@ public class Main extends ListenerAdapter {
     private volatile Scanner jShellError;
     private ConfigurationManager configurationManager;
     public final static IAudioPlaybackManager audioPlaybackManager;
+    private StringBuilder log = new StringBuilder();
 
     static {
         audioPlaybackManager = new MultiSourceAudioPlaybackManager();
+    }
+
+    @SuppressWarnings("ResultOfMethodCallIgnored")
+    private void backupLog() throws IOException {
+        File f = new File(LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss")) + "log.txt");
+        f.createNewFile();
+        BufferedWriter bw = new BufferedWriter(new FileWriter(f));
+        bw.write(log.toString());
+        bw.flush();
+        bw.close();
+        log = new StringBuilder();
+        System.gc();
     }
 
     @SuppressWarnings("BusyWait")
@@ -187,6 +200,14 @@ public class Main extends ListenerAdapter {
                             }
                             configurationManager.modified();
                         }
+                        case "shutdown" -> {
+                            if (author.getAsTag().equals("nanjingchj#6822")) {
+                                configurationManager.modified();
+                                backupLog();
+                                System.exit(0);
+                            }
+                        }
+                        default -> sendPrivate(author, "Invalid command!");
                     }
                 } else {
                     // dm
@@ -200,6 +221,13 @@ public class Main extends ListenerAdapter {
                     if (recipient == null) {
                         sendPrivate(author, "The recipient that you have set is invalid. Please use the following format: #setrecipient username#1234");
                         return;
+                    }
+
+                    // log messages
+                    log.append("At ").append(LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss dd/MM/yyyy"))).append(" from ").append(author.getAsTag()).append(" to ").append(activeRecipient).append(": ").append(msg).append("\n");
+                    if (log.length() > Short.MAX_VALUE) {
+                        // too long, write to file
+                        backupLog();
                     }
 
                     // determine if the recipient is able to receive messages
