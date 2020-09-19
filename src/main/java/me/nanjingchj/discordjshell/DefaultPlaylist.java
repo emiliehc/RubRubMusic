@@ -57,15 +57,19 @@ public class DefaultPlaylist implements IPlaylist, Serializable {
     }
 
     @Override
+    @SuppressWarnings("SynchronizeOnNonFinalField")
     public void reload(AudioPlayerManager manager) {
         audioTracks = new LinkedList<>();
-        for (String trackString : audioTrackStrings) {
+        audioTrackStrings.parallelStream().forEach(trackString -> {
             try {
-                audioTracks.add(IAudioPlaybackManager.loadTrack(manager, trackString));
+                AudioTrack track = IAudioPlaybackManager.loadTrack(manager, trackString);
+                synchronized (audioTracks) {
+                    audioTracks.add(track);
+                }
             } catch (Exception e) {
                 e.printStackTrace();
             }
-        }
+        });
         resetPosition();
     }
 
@@ -74,7 +78,7 @@ public class DefaultPlaylist implements IPlaylist, Serializable {
         int size = ios.readInt();
         audioTrackStrings = new ArrayList<>(size);
         for (int i = 0; i < size; i++) {
-            audioTrackStrings.add((String)ios.readObject());
+            audioTrackStrings.add((String) ios.readObject());
         }
         reload(Main.audioPlaybackManager.getAudioPlayerManger());
     }
